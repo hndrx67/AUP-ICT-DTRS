@@ -1,0 +1,326 @@
+.kiosk-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #f8fafc;
+  color: #1f2937;
+}
+
+.kiosk-header {
+  padding: 0;
+  text-align: center;
+  background: #1e3a8a;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 30px;
+  border-bottom: 4px solid #0369a1;
+}
+
+.kiosk-header h1 {
+  font-size: 2.8em;
+  margin: 0 0 8px 0;
+  color: white;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.kiosk-header::after {
+  content: 'AUP-ICT Daily Time Record System';
+  display: block;
+  color: #bfdbfe;
+  font-size: 0.9em;
+  font-weight: 400;
+  letter-spacing: 1px;
+  margin-top: 8px;
+}
+
+.system-time {
+  font-size: 1.4em;
+  font-weight: 600;
+  color: white;
+  margin-top: 15px;
+  letter-spacing: 0.5px;
+}
+
+.kiosk-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 60px 40px;
+}
+
+.input-form {
+  background: white;
+  padding: 50px 45px;
+  border: 0;
+  box-shadow: 0 4px 20px rgba(30, 58, 138, 0.12);
+  width: 100%;
+  max-width: 550px;
+}
+
+.form-group {
+  margin-bottom: 28px;
+}
+
+.form-group label {
+  display: block;
+  color: #1e3a8a;
+  font-weight: 600;
+  margin-bottom: 14px;
+  font-size: 1.05em;
+  letter-spacing: 0.3px;
+}
+
+.id-input {
+  width: 100%;
+  padding: 18px 16px;
+  font-size: 1.3em;
+  border: 2px solid #e0e7ff;
+  background: #f8fafc;
+  text-align: center;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  transition: all 0.3s ease;
+}
+
+.id-input:focus {
+  outline: none;
+  border-color: #0369a1;
+  background: white;
+  box-shadow: inset 0 0 0 3px rgba(3, 105, 161, 0.05);
+}
+
+.id-input::placeholder {
+  color: #cbd5e1;
+  font-weight: 500;
+}
+
+.submit-btn {
+  width: 100%;
+  padding: 18px;
+  font-size: 1.15em;
+  font-weight: 700;
+  background: #0369a1;
+  color: white;
+  border: 0;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  letter-spacing: 0.5px;
+}
+
+.submit-btn:hover:not(:disabled) {
+  background: #0c4a6e;
+  box-shadow: 0 8px 16px rgba(3, 105, 161, 0.3);
+}
+
+.submit-btn:active:not(:disabled) {
+  background: #082f49;
+}
+
+.submit-btn:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.student-display {
+  text-align: center;
+  animation: fadeIn 0.5s ease;
+  padding: 40px;
+  background: white;
+  border: 0;
+  box-shadow: 0 4px 20px rgba(30, 58, 138, 0.12);
+  width: 100%;
+  max-width: 550px;
+}
+
+.welcome-message h2 {
+  color: #0369a1;
+  font-size: 1.8em;
+  margin-bottom: 20px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.student-name {
+  margin: 25px 0;
+}
+
+.student-name p {
+  font-size: 2.2em;
+  color: #1e3a8a;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.system-timestamp {
+  margin-top: 30px;
+}
+
+.system-timestamp p {
+  font-size: 1.1em;
+  color: #475569;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+.message {
+  margin-top: 25px;
+  padding: 16px 20px;
+  font-size: 1.1em;
+  font-weight: 600;
+  text-align: center;
+  border: 0;
+  animation: slideUp 0.3s ease;
+  letter-spacing: 0.4px;
+}
+
+.message-success {
+  background: #ecfdf5;
+  color: #065f46;
+  border-left: 4px solid #10b981;
+}
+
+.message-error {
+  background: #fef2f2;
+  color: #7f1d1d;
+  border-left: 4px solid #ef4444;
+}
+
+.kiosk-footer {
+  background: #0f172a;
+  color: #bfdbfe;
+  padding: 18px 30px;
+  text-align: center;
+  border-top: 2px solid #1e3a8a;
+  font-size: 0.95em;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+.kiosk-footer p {
+  margin: 0;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .kiosk-header h1 {
+    font-size: 2em;
+  }
+
+  .kiosk-header::after {
+    font-size: 0.8em;
+  }
+
+  .kiosk-content {
+    padding: 40px 20px;
+  }
+
+  .input-form,
+  .student-display {
+    max-width: 100%;
+    padding: 40px 25px;
+  }
+
+  .student-name p {
+    font-size: 1.8em;
+  }
+
+  .id-input {
+    font-size: 1.1em;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.welcome-message h2 {
+  font-size: 2.5em;
+  margin-bottom: 20px;
+}
+
+.student-name {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 30px;
+  border-radius: 10px;
+  margin: 20px 0;
+}
+
+.student-name p {
+  font-size: 2em;
+  font-weight: bold;
+  margin: 0;
+}
+
+.system-timestamp {
+  font-size: 1.3em;
+  margin-top: 20px;
+}
+
+.message {
+  margin-top: 20px;
+  padding: 15px 20px;
+  border-radius: 5px;
+  font-weight: bold;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-success {
+  background: rgba(76, 175, 80, 0.9);
+  color: white;
+}
+
+.message-error {
+  background: rgba(244, 67, 54, 0.9);
+  color: white;
+}
+
+.kiosk-footer {
+  padding: 20px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.2);
+  font-size: 0.9em;
+}
