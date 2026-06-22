@@ -3,7 +3,7 @@
   <p>
     <img width="150" height="150" alt="Adventist_University_of_the_Philippines_logo" src="https://github.com/user-attachments/assets/4e92f2d0-68e2-4ed4-b6fd-dffe2caa942a" />
   </p>
-  <h1 align="center" style="font-size: 2.5rem; font-weight: bold;">DTRS - Daily Time Record System</h1>
+  <h1 align="center" style="font-size: 2.5rem; font-weight: bold;">AUP-ICTS DTRS - Daily Time Record System</h1>
   <p align="center">
   </p>
 </div>
