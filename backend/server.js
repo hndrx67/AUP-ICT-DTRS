@@ -38,6 +38,10 @@ async function initializeDatabase() {
         id_number VARCHAR(50) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         status VARCHAR(50) DEFAULT 'active',
+        fingerprint_enabled BOOLEAN DEFAULT FALSE,
+        required_hours_per_week INT DEFAULT 0,
+        work_assignment VARCHAR(255) DEFAULT NULL,
+        department VARCHAR(255) DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
@@ -64,6 +68,51 @@ async function initializeDatabase() {
     } catch (err) {
       if (err.code !== 'ER_DUP_FIELDNAME') {
         console.warn('Note: wallpaper column already exists or other issue:', err.message);
+      }
+    }
+
+    // Add student-specific fingerprint and assignment columns if they don't exist
+    try {
+      await connection.execute(`
+        ALTER TABLE students ADD COLUMN fingerprint_enabled BOOLEAN DEFAULT FALSE
+      `);
+      console.log('✓ Added fingerprint_enabled column to students table');
+    } catch (err) {
+      if (err.code !== 'ER_DUP_FIELDNAME') {
+        console.warn('Note: fingerprint_enabled column already exists or other issue:', err.message);
+      }
+    }
+
+    try {
+      await connection.execute(`
+        ALTER TABLE students ADD COLUMN required_hours_per_week INT DEFAULT 0
+      `);
+      console.log('✓ Added required_hours_per_week column to students table');
+    } catch (err) {
+      if (err.code !== 'ER_DUP_FIELDNAME') {
+        console.warn('Note: required_hours_per_week column already exists or other issue:', err.message);
+      }
+    }
+
+    try {
+      await connection.execute(`
+        ALTER TABLE students ADD COLUMN work_assignment VARCHAR(255) DEFAULT NULL
+      `);
+      console.log('✓ Added work_assignment column to students table');
+    } catch (err) {
+      if (err.code !== 'ER_DUP_FIELDNAME') {
+        console.warn('Note: work_assignment column already exists or other issue:', err.message);
+      }
+    }
+
+    try {
+      await connection.execute(`
+        ALTER TABLE students ADD COLUMN department VARCHAR(255) DEFAULT NULL
+      `);
+      console.log('✓ Added department column to students table');
+    } catch (err) {
+      if (err.code !== 'ER_DUP_FIELDNAME') {
+        console.warn('Note: department column already exists or other issue:', err.message);
       }
     }
 
@@ -134,8 +183,8 @@ app.get('/api/time', (req, res) => {
 app.get('/api/students/:id_number', async (req, res) => {
   const connection = await pool.getConnection();
   try {
-    // Try to get student with image columns
-    let query = `SELECT id_number, name, status`;
+    // Try to get student with image columns and student metadata
+    let query = `SELECT id_number, name, status, fingerprint_enabled, required_hours_per_week, work_assignment, department`;
     
     // Dynamically check if image columns exist
     try {
@@ -201,6 +250,40 @@ app.get('/api/settings', async (req, res) => {
     res.json(settings);
   } catch (error) {
     res.status(500).json({ error: 'Database error' });
+  } finally {
+    connection.release();
+  }
+});
+
+// Public: Simulated fingerprint verification endpoint
+app.get('/api/fingerprint/verify', async (req, res) => {
+  const studentId = req.query.student_id;
+  if (!studentId) {
+    return res.status(400).json({ error: 'student_id is required' });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    const [rows] = await connection.execute(
+      `SELECT fingerprint_enabled FROM students WHERE id_number = ?`,
+      [studentId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    const student = rows[0];
+    if (!student.fingerprint_enabled) {
+      return res.json({ authenticated: true });
+    }
+
+    // Fingerprint hardware integration is not implemented yet.
+    // Return false so the kiosk modal can timeout and fail cleanly.
+    res.json({ authenticated: false });
+  } catch (error) {
+    console.error('Fingerprint verify error:', error);
+    res.status(500).json({ error: 'Verification error' });
   } finally {
     connection.release();
   }
@@ -318,7 +401,16 @@ app.post('/api/admin/login', async (req, res) => {
 
 // Admin: Register student
 app.post('/api/students', authenticateToken, async (req, res) => {
-  const { id_number, name, profile_picture, wallpaper } = req.body;
+  const {
+    id_number,
+    name,
+    profile_picture,
+    wallpaper,
+    fingerprint_enabled = false,
+    required_hours_per_week = 0,
+    work_assignment = null,
+    department = null
+  } = req.body;
 
   if (!id_number || !name) {
     return res.status(400).json({ error: 'id_number and name are required' });
@@ -341,8 +433,8 @@ app.post('/api/students', authenticateToken, async (req, res) => {
     // Try to insert with image columns first
     try {
       await connection.execute(
-        'INSERT INTO students (id_number, name, status, profile_picture, wallpaper) VALUES (?, ?, ?, ?, ?)',
-        [id_number, name, 'active', profilePictureBuffer, wallpaperBuffer]
+        'INSERT INTO students (id_number, name, status, fingerprint_enabled, required_hours_per_week, work_assignment, department, profile_picture, wallpaper) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [id_number, name, 'active', fingerprint_enabled ? 1 : 0, required_hours_per_week, work_assignment, department, profilePictureBuffer, wallpaperBuffer]
       );
       console.log(`✓ Student registered with images: ${id_number}`);
     } catch (insertError) {
@@ -350,10 +442,9 @@ app.post('/api/students', authenticateToken, async (req, res) => {
       if (insertError.message && insertError.message.includes('Unknown column')) {
         console.log('Image columns not yet available, registering without images');
         await connection.execute(
-          'INSERT INTO students (id_number, name, status) VALUES (?, ?, ?)',
-          [id_number, name, 'active']
+          'INSERT INTO students (id_number, name, status, fingerprint_enabled, required_hours_per_week, work_assignment, department) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [id_number, name, 'active', fingerprint_enabled ? 1 : 0, required_hours_per_week, work_assignment, department]
         );
-        console.log(`✓ Student registered without images: ${id_number}`);
       } else {
         throw insertError;
       }
@@ -377,7 +468,7 @@ app.get('/api/students', authenticateToken, async (req, res) => {
   const connection = await pool.getConnection();
   try {
     // Build query dynamically based on available columns
-    let query = `SELECT id_number, name, status, created_at, updated_at`;
+    let query = `SELECT id_number, name, status, fingerprint_enabled, required_hours_per_week, work_assignment, department, created_at, updated_at`;
     
     // Check if image columns exist
     try {
@@ -429,7 +520,16 @@ app.get('/api/students', authenticateToken, async (req, res) => {
 
 // Admin: Update student
 app.put('/api/students/:id_number', authenticateToken, async (req, res) => {
-  const { name, status, profile_picture, wallpaper } = req.body;
+  const {
+    name,
+    status,
+    profile_picture,
+    wallpaper,
+    fingerprint_enabled,
+    required_hours_per_week,
+    work_assignment,
+    department
+  } = req.body;
   const connection = await pool.getConnection();
   try {
     // Convert base64 to buffer if provided
@@ -455,6 +555,22 @@ app.put('/api/students/:id_number', authenticateToken, async (req, res) => {
     if (status !== undefined) {
       updateFields.push('status = ?');
       updateValues.push(status);
+    }
+    if (fingerprint_enabled !== undefined) {
+      updateFields.push('fingerprint_enabled = ?');
+      updateValues.push(fingerprint_enabled ? 1 : 0);
+    }
+    if (required_hours_per_week !== undefined) {
+      updateFields.push('required_hours_per_week = ?');
+      updateValues.push(required_hours_per_week);
+    }
+    if (work_assignment !== undefined) {
+      updateFields.push('work_assignment = ?');
+      updateValues.push(work_assignment);
+    }
+    if (department !== undefined) {
+      updateFields.push('department = ?');
+      updateValues.push(department);
     }
     
     // Only add image fields if columns exist

@@ -7,9 +7,27 @@ function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('students');
   const [students, setStudents] = useState([]);
   const [settings, setSettings] = useState({ enable_rfid: true, enable_fingerprint: false });
-  const [newStudent, setNewStudent] = useState({ id_number: '', name: '', profile_picture: null, wallpaper: null });
+  const [newStudent, setNewStudent] = useState({
+    id_number: '',
+    name: '',
+    profile_picture: null,
+    wallpaper: null,
+    fingerprint_enabled: false,
+    required_hours_per_week: '',
+    work_assignment: '',
+    department: ''
+  });
   const [editingStudent, setEditingStudent] = useState(null);
-  const [editFormData, setEditFormData] = useState({ name: '', status: '', profile_picture: null, wallpaper: null });
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    status: '',
+    profile_picture: null,
+    wallpaper: null,
+    fingerprint_enabled: false,
+    required_hours_per_week: '',
+    work_assignment: '',
+    department: ''
+  });
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -97,9 +115,23 @@ function AdminDashboard() {
 
     setIsLoading(true);
     try {
-      await axios.post('/api/students', newStudent, axiosConfig);
+      await axios.post('/api/students', {
+        ...newStudent,
+        required_hours_per_week: newStudent.required_hours_per_week === ''
+          ? 0
+          : Number(newStudent.required_hours_per_week)
+      }, axiosConfig);
       showMessage('Student registered successfully', 'success');
-      setNewStudent({ id_number: '', name: '', profile_picture: null, wallpaper: null });
+      setNewStudent({
+        id_number: '',
+        name: '',
+        profile_picture: null,
+        wallpaper: null,
+        fingerprint_enabled: false,
+        required_hours_per_week: 0,
+        work_assignment: '',
+        department: ''
+      });
       fetchStudents();
     } catch (error) {
       showMessage(error.response?.data?.error || 'Failed to register student', 'error');
@@ -150,7 +182,11 @@ function AdminDashboard() {
       name: student.name,
       status: student.status,
       profile_picture: null,
-      wallpaper: null
+      wallpaper: null,
+      fingerprint_enabled: !!student.fingerprint_enabled,
+      required_hours_per_week: student.required_hours_per_week != null ? String(student.required_hours_per_week) : '',
+      work_assignment: student.work_assignment || '',
+      department: student.department || ''
     });
   };
 
@@ -166,7 +202,13 @@ function AdminDashboard() {
     try {
       const updateData = {
         name: editFormData.name,
-        status: editFormData.status
+        status: editFormData.status,
+        fingerprint_enabled: editFormData.fingerprint_enabled,
+        required_hours_per_week: editFormData.required_hours_per_week === ''
+          ? 0
+          : Number(editFormData.required_hours_per_week),
+        work_assignment: editFormData.work_assignment,
+        department: editFormData.department
       };
 
       // Only include images if they were changed
@@ -180,7 +222,16 @@ function AdminDashboard() {
       await axios.put(`/api/students/${editingStudent}`, updateData, axiosConfig);
       showMessage('Student updated successfully', 'success');
       setEditingStudent(null);
-      setEditFormData({ name: '', status: '', profile_picture: null, wallpaper: null });
+      setEditFormData({
+        name: '',
+        status: '',
+        profile_picture: null,
+        wallpaper: null,
+        fingerprint_enabled: false,
+        required_hours_per_week: 0,
+        work_assignment: '',
+        department: ''
+      });
       fetchStudents();
     } catch (error) {
       showMessage(error.response?.data?.error || 'Failed to update student', 'error');
@@ -191,7 +242,16 @@ function AdminDashboard() {
 
   const handleCancelEdit = () => {
     setEditingStudent(null);
-    setEditFormData({ name: '', status: '', profile_picture: null, wallpaper: null });
+    setEditFormData({
+      name: '',
+      status: '',
+      profile_picture: null,
+      wallpaper: null,
+      fingerprint_enabled: false,
+      required_hours_per_week: 0,
+      work_assignment: '',
+      department: ''
+    });
   };
 
   return (
@@ -254,6 +314,48 @@ function AdminDashboard() {
                     disabled={isLoading}
                   />
                 </div>
+                <div className="form-group checkbox-group">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={newStudent.fingerprint_enabled}
+                      onChange={(e) => setNewStudent({ ...newStudent, fingerprint_enabled: e.target.checked })}
+                      disabled={isLoading}
+                    />
+                    Require fingerprint setup
+                  </label>
+                </div>
+                <div className="form-group">
+                  <label>Required Hours Per Week:</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newStudent.required_hours_per_week}
+                    onChange={(e) => setNewStudent({ ...newStudent, required_hours_per_week: e.target.value })}
+                    placeholder="0"
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Work Assignment:</label>
+                  <input
+                    type="text"
+                    value={newStudent.work_assignment}
+                    onChange={(e) => setNewStudent({ ...newStudent, work_assignment: e.target.value })}
+                    placeholder="Enter work assignment"
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Department:</label>
+                  <input
+                    type="text"
+                    value={newStudent.department}
+                    onChange={(e) => setNewStudent({ ...newStudent, department: e.target.value })}
+                    placeholder="Enter department"
+                    disabled={isLoading}
+                  />
+                </div>
                 <div className="form-group">
                   <label>Profile Picture:</label>
                   <input
@@ -297,6 +399,10 @@ function AdminDashboard() {
                       <th>ID Number</th>
                       <th>Name</th>
                       <th>Status</th>
+                      <th>Fingerprint</th>
+                      <th>Hours/Wk</th>
+                      <th>Assignment</th>
+                      <th>Department</th>
                       <th>Registered</th>
                       <th>Actions</th>
                     </tr>
@@ -307,6 +413,10 @@ function AdminDashboard() {
                         <td>{student.id_number}</td>
                         <td>{student.name}</td>
                         <td><span className={`status ${student.status}`}>{student.status}</span></td>
+                        <td>{student.fingerprint_enabled ? '✓' : '✗'}</td>
+                        <td>{student.required_hours_per_week || 0}</td>
+                        <td>{student.work_assignment || '-'}</td>
+                        <td>{student.department || '-'}</td>
                         <td>{new Date(student.created_at).toLocaleDateString()}</td>
                         <td className="actions">
                           <button
@@ -365,6 +475,45 @@ function AdminDashboard() {
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
                       </select>
+                    </div>
+                    <div className="form-group checkbox-group">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={editFormData.fingerprint_enabled}
+                          onChange={(e) => setEditFormData({ ...editFormData, fingerprint_enabled: e.target.checked })}
+                          disabled={isLoading}
+                        />
+                        Require fingerprint setup
+                      </label>
+                    </div>
+                    <div className="form-group">
+                      <label>Required Hours Per Week:</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={editFormData.required_hours_per_week}
+                        onChange={(e) => setEditFormData({ ...editFormData, required_hours_per_week: e.target.value })}
+                        disabled={isLoading}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Work Assignment:</label>
+                      <input
+                        type="text"
+                        value={editFormData.work_assignment}
+                        onChange={(e) => setEditFormData({ ...editFormData, work_assignment: e.target.value })}
+                        disabled={isLoading}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Department:</label>
+                      <input
+                        type="text"
+                        value={editFormData.department}
+                        onChange={(e) => setEditFormData({ ...editFormData, department: e.target.value })}
+                        disabled={isLoading}
+                      />
                     </div>
                     <div className="form-group">
                       <label>Profile Picture:</label>
