@@ -2,6 +2,22 @@ import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import './KioskScreen.css';
 
+// Helper function to detect image format from base64
+function detectImageFormat(base64String) {
+  if (!base64String) return 'image/jpeg';
+  
+  // Check base64 magic numbers (first few characters after decoding)
+  const header = base64String.substring(0, 10);
+  
+  if (header.startsWith('/9j/')) return 'image/jpeg';
+  if (header.startsWith('iVBORw0KG')) return 'image/png';
+  if (header.startsWith('R0lGODlh')) return 'image/gif';
+  if (header.startsWith('UklGRi')) return 'image/webp';
+  
+  // Default to JPEG
+  return 'image/jpeg';
+}
+
 function KioskScreen() {
   const [studentId, setStudentId] = useState('');
   const [studentInfo, setStudentInfo] = useState(null);
@@ -77,6 +93,16 @@ function KioskScreen() {
       // Fetch student info
       const studentResponse = await axios.get(`/api/students/${studentId}`);
       const student = studentResponse.data;
+      
+      // Debug: Log what we received
+      console.log('Student data received:', {
+        id: student.id_number,
+        name: student.name,
+        hasProfilePicture: !!student.profile_picture,
+        hasWallpaper: !!student.wallpaper,
+        profilePictureLength: student.profile_picture ? student.profile_picture.length : 0,
+        wallpaperLength: student.wallpaper ? student.wallpaper.length : 0
+      });
 
       // Get current server time
       const timeResponse = await axios.get('/api/time');
@@ -97,12 +123,19 @@ function KioskScreen() {
           student_id: studentId
         });
         
+        const logType = logResponse.data.type;
+        
+        // Update student info with log type
+        setStudentInfo(prevState => ({
+          ...prevState,
+          logType: logType
+        }));
+        
         // Show the log type message after 1 second
         setTimeout(() => {
-          const logType = logResponse.data.type;
           const displayMessage = logType === 'time_in' 
-            ? `✓ ${student.name} TIMED IN` 
-            : `✗ ${student.name} TIMED OUT`;
+            ? `✓ TIMED IN` 
+            : `✗ TIMED OUT`;
           setMessage(displayMessage);
           setMessageType('success');
         }, 1000);
@@ -157,46 +190,32 @@ function KioskScreen() {
   return (
     <div className="kiosk-container">
       <div className="kiosk-header">
-        <h1>DTRS - Kiosk</h1>
+        <h1>AUP - Daily Time Record</h1>
         <div className="system-time">
           {systemTime.toLocaleTimeString()}
         </div>
       </div>
 
       <div className="kiosk-content">
-        {!studentInfo ? (
-          <form onSubmit={handleSubmit} className="input-form">
-            <div className="form-group">
-              <label htmlFor="studentId">Enter Student ID:</label>
-              <input
-                ref={inputRef}
-                type="text"
-                id="studentId"
-                value={studentId}
-                onChange={handleStudentIdChange}
-                placeholder="Scan ID or type manually"
-                disabled={isLoading}
-                autoComplete="off"
-                className="id-input"
-              />
-            </div>
-            <button type="submit" disabled={isLoading} className="submit-btn">
-              {isLoading ? 'Processing...' : 'SUBMIT'}
-            </button>
-          </form>
-        ) : (
-          <div className="student-display">
-            <div className="welcome-message">
-              <h2>Welcome!</h2>
-            </div>
-            <div className="student-name">
-              <p>{studentInfo.name}</p>
-            </div>
-            <div className="system-timestamp">
-              <p>{studentInfo.timestamp.toLocaleString()}</p>
-            </div>
+        <form onSubmit={handleSubmit} className="input-form">
+          <div className="form-group">
+            <label htmlFor="studentId">Enter Student ID:</label>
+            <input
+              ref={inputRef}
+              type="text"
+              id="studentId"
+              value={studentId}
+              onChange={handleStudentIdChange}
+              placeholder="Scan ID or type manually"
+              disabled={isLoading}
+              autoComplete="off"
+              className="id-input"
+            />
           </div>
-        )}
+          <button type="submit" disabled={isLoading} className="submit-btn">
+            {isLoading ? 'Processing...' : 'SUBMIT'}
+          </button>
+        </form>
 
         {message && (
           <div className={`message message-${messageType}`}>
@@ -204,6 +223,68 @@ function KioskScreen() {
           </div>
         )}
       </div>
+
+      {/* Student ID Card Modal */}
+      {studentInfo && (
+        <div className="id-card-modal-overlay">
+          <div 
+            className="id-card-modal"
+            style={studentInfo.wallpaper ? {
+              backgroundImage: `url(data:${detectImageFormat(studentInfo.wallpaper)};base64,${studentInfo.wallpaper})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+            } : {}}
+          >
+            {/* Left Section - Profile Picture */}
+            <div className="id-card-left">
+              {studentInfo.profile_picture ? (
+                <img 
+                  src={`data:${detectImageFormat(studentInfo.profile_picture)};base64,${studentInfo.profile_picture}`}
+                  alt={studentInfo.name}
+                  className="id-card-profile-picture"
+                  onError={(e) => {
+                    console.error('Failed to load profile picture');
+                    e.target.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <div className="id-card-profile-placeholder">
+                  <div className="placeholder-text">{studentInfo.name.charAt(0).toUpperCase()}</div>
+                </div>
+              )}
+            </div>
+
+            {/* Right Section - Student Info */}
+            <div className="id-card-right">
+              {studentInfo.logType && (
+                <div className={`id-card-indicator id-card-${studentInfo.logType}`}>
+                  {studentInfo.logType === 'time_in' ? '→ TIMING IN' : '← TIMING OUT'}
+                </div>
+              )}
+              <div className="id-card-info">
+                <h2 className="id-card-name">{studentInfo.name}</h2>
+                <div className="id-card-id">
+                  <span className="label">ID:</span>
+                  <span className="value">{studentInfo.id_number}</span>
+                </div>
+                <div className="id-card-status">
+                  <span className="label">Status:</span>
+                  <span className="value">{studentInfo.status || 'Active'}</span>
+                </div>
+                <div className="id-card-time">
+                  <span className="label">Time:</span>
+                  <span className="value">{studentInfo.timestamp.toLocaleTimeString()}</span>
+                </div>
+                <div className="id-card-date">
+                  <span className="label">Date:</span>
+                  <span className="value">{studentInfo.timestamp.toLocaleDateString()}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="kiosk-footer">
         <p>Status: {settings.enable_rfid ? '✓ RFID Enabled' : '✗ RFID Disabled'} | 

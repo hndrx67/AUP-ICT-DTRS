@@ -7,8 +7,9 @@ function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('students');
   const [students, setStudents] = useState([]);
   const [settings, setSettings] = useState({ enable_rfid: true, enable_fingerprint: false });
-  const [newStudent, setNewStudent] = useState({ id_number: '', name: '' });
+  const [newStudent, setNewStudent] = useState({ id_number: '', name: '', profile_picture: null, wallpaper: null });
   const [editingStudent, setEditingStudent] = useState(null);
+  const [editFormData, setEditFormData] = useState({ name: '', status: '', profile_picture: null, wallpaper: null });
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -54,6 +55,22 @@ function AdminDashboard() {
     setTimeout(() => setMessage(''), 3000);
   };
 
+  const handleFileChange = (e, fileType, isEdit = false) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64String = event.target.result;
+        if (isEdit) {
+          setEditFormData(prev => ({ ...prev, [fileType]: base64String }));
+        } else {
+          setNewStudent(prev => ({ ...prev, [fileType]: base64String }));
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const fetchTimeLogs = async (studentId) => {
     setIsLoading(true);
     try {
@@ -82,7 +99,7 @@ function AdminDashboard() {
     try {
       await axios.post('/api/students', newStudent, axiosConfig);
       showMessage('Student registered successfully', 'success');
-      setNewStudent({ id_number: '', name: '' });
+      setNewStudent({ id_number: '', name: '', profile_picture: null, wallpaper: null });
       fetchStudents();
     } catch (error) {
       showMessage(error.response?.data?.error || 'Failed to register student', 'error');
@@ -125,6 +142,56 @@ function AdminDashboard() {
   const handleLogout = () => {
     localStorage.removeItem('admin_token');
     navigate('/admin/login');
+  };
+
+  const handleEditStudent = (student) => {
+    setEditingStudent(student.id_number);
+    setEditFormData({
+      name: student.name,
+      status: student.status,
+      profile_picture: null,
+      wallpaper: null
+    });
+  };
+
+  const handleUpdateStudent = async (e) => {
+    e.preventDefault();
+
+    if (!editFormData.name) {
+      showMessage('Please fill in the name', 'error');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const updateData = {
+        name: editFormData.name,
+        status: editFormData.status
+      };
+
+      // Only include images if they were changed
+      if (editFormData.profile_picture) {
+        updateData.profile_picture = editFormData.profile_picture;
+      }
+      if (editFormData.wallpaper) {
+        updateData.wallpaper = editFormData.wallpaper;
+      }
+
+      await axios.put(`/api/students/${editingStudent}`, updateData, axiosConfig);
+      showMessage('Student updated successfully', 'success');
+      setEditingStudent(null);
+      setEditFormData({ name: '', status: '', profile_picture: null, wallpaper: null });
+      fetchStudents();
+    } catch (error) {
+      showMessage(error.response?.data?.error || 'Failed to update student', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingStudent(null);
+    setEditFormData({ name: '', status: '', profile_picture: null, wallpaper: null });
   };
 
   return (
@@ -187,6 +254,34 @@ function AdminDashboard() {
                     disabled={isLoading}
                   />
                 </div>
+                <div className="form-group">
+                  <label>Profile Picture:</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleFileChange(e, 'profile_picture')}
+                    disabled={isLoading}
+                  />
+                  {newStudent.profile_picture && (
+                    <div className="image-preview">
+                      <img src={newStudent.profile_picture} alt="Profile preview" />
+                    </div>
+                  )}
+                </div>
+                <div className="form-group">
+                  <label>Kiosk Wallpaper:</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleFileChange(e, 'wallpaper')}
+                    disabled={isLoading}
+                  />
+                  {newStudent.wallpaper && (
+                    <div className="image-preview">
+                      <img src={newStudent.wallpaper} alt="Wallpaper preview" />
+                    </div>
+                  )}
+                </div>
                 <button type="submit" disabled={isLoading} className="submit-btn">
                   {isLoading ? 'Registering...' : 'REGISTER STUDENT'}
                 </button>
@@ -215,6 +310,12 @@ function AdminDashboard() {
                         <td>{new Date(student.created_at).toLocaleDateString()}</td>
                         <td className="actions">
                           <button
+                            onClick={() => handleEditStudent(student)}
+                            className="edit-btn"
+                          >
+                            Edit
+                          </button>
+                          <button
                             onClick={() => handleDeleteStudent(student.id_number)}
                             className="delete-btn"
                           >
@@ -227,6 +328,84 @@ function AdminDashboard() {
                 </table>
               </div>
             </div>
+
+            {editingStudent && (
+              <div className="modal-overlay">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <h2>Edit Student</h2>
+                    <button className="close-btn" onClick={handleCancelEdit}>×</button>
+                  </div>
+                  <form onSubmit={handleUpdateStudent} className="edit-form">
+                    <div className="form-group">
+                      <label>Student ID:</label>
+                      <input
+                        type="text"
+                        value={editingStudent}
+                        disabled
+                        className="disabled-input"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Full Name:</label>
+                      <input
+                        type="text"
+                        value={editFormData.name}
+                        onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                        disabled={isLoading}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Status:</label>
+                      <select
+                        value={editFormData.status}
+                        onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
+                        disabled={isLoading}
+                      >
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Profile Picture:</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFileChange(e, 'profile_picture', true)}
+                        disabled={isLoading}
+                      />
+                      {editFormData.profile_picture && (
+                        <div className="image-preview">
+                          <img src={editFormData.profile_picture} alt="Profile preview" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="form-group">
+                      <label>Kiosk Wallpaper:</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFileChange(e, 'wallpaper', true)}
+                        disabled={isLoading}
+                      />
+                      {editFormData.wallpaper && (
+                        <div className="image-preview">
+                          <img src={editFormData.wallpaper} alt="Wallpaper preview" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="form-actions">
+                      <button type="submit" disabled={isLoading} className="submit-btn">
+                        {isLoading ? 'Updating...' : 'UPDATE STUDENT'}
+                      </button>
+                      <button type="button" onClick={handleCancelEdit} className="cancel-btn" disabled={isLoading}>
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

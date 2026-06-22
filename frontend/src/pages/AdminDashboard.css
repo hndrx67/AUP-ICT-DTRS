@@ -616,6 +616,164 @@ input:disabled + .slider {
   font-weight: 700;
 }
 
+/* Edit Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 25px rgba(0, 0, 0, 0.2);
+  animation: slideInUp 0.3s ease;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #1e3a8a;
+  color: white;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.5em;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 2em;
+  cursor: pointer;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+}
+
+.close-btn:hover {
+  transform: scale(1.1);
+}
+
+.edit-form {
+  padding: 24px;
+}
+
+.disabled-input {
+  background: #f1f5f9;
+  cursor: not-allowed;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.form-actions button {
+  flex: 1;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.95em;
+  letter-spacing: 0.3px;
+}
+
+.form-actions .submit-btn {
+  background: #0369a1;
+  color: white;
+}
+
+.form-actions .submit-btn:hover:not(:disabled) {
+  background: #0256a7;
+  box-shadow: 0 4px 12px rgba(3, 105, 161, 0.3);
+}
+
+.form-actions .submit-btn:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.form-actions .cancel-btn {
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.form-actions .cancel-btn:hover:not(:disabled) {
+  background: #cbd5e1;
+}
+
+/* Image Preview Styles */
+.image-preview {
+  margin-top: 12px;
+  border: 2px dashed #cbd5e1;
+  border-radius: 6px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.image-preview img {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 4px;
+  display: block;
+}
+
+/* Edit button styles */
+.edit-btn {
+  padding: 8px 12px;
+  background: #0369a1;
+  color: white;
+  border: none;
+  cursor: pointer;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.85em;
+  transition: all 0.2s ease;
+  margin-right: 8px;
+}
+
+.edit-btn:hover {
+  background: #0256a7;
+  box-shadow: 0 2px 8px rgba(3, 105, 161, 0.3);
+}
+
 .timelogs-list-section {
   display: flex;
   flex-direction: column;

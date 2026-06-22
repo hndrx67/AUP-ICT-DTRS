@@ -13,7 +13,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb' }));
 
 // MySQL Connection Pool
 const pool = mysql.createPool({
@@ -42,6 +43,30 @@ async function initializeDatabase() {
       )
     `);
 
+    // Add profile_picture column if it doesn't exist
+    try {
+      await connection.execute(`
+        ALTER TABLE students ADD COLUMN profile_picture LONGBLOB
+      `);
+      console.log('✓ Added profile_picture column to students table');
+    } catch (err) {
+      if (err.code !== 'ER_DUP_FIELDNAME') {
+        console.warn('Note: profile_picture column already exists or other issue:', err.message);
+      }
+    }
+
+    // Add wallpaper column if it doesn't exist
+    try {
+      await connection.execute(`
+        ALTER TABLE students ADD COLUMN wallpaper LONGBLOB
+      `);
+      console.log('✓ Added wallpaper column to students table');
+    } catch (err) {
+      if (err.code !== 'ER_DUP_FIELDNAME') {
+        console.warn('Note: wallpaper column already exists or other issue:', err.message);
+      }
+    }
+
     // Create time_logs table
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS time_logs (
@@ -59,7 +84,7 @@ async function initializeDatabase() {
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS settings (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        key VARCHAR(100) UNIQUE NOT NULL,
+        \`key\` VARCHAR(100) UNIQUE NOT NULL,
         value VARCHAR(255) NOT NULL,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
@@ -67,7 +92,7 @@ async function initializeDatabase() {
 
     // Insert default settings if they don't exist
     await connection.execute(`
-      INSERT IGNORE INTO settings (key, value) VALUES 
+      INSERT IGNORE INTO settings (\`key\`, value) VALUES 
       ('enable_rfid', 'true'),
       ('enable_fingerprint', 'false')
     `);
@@ -109,17 +134,55 @@ app.get('/api/time', (req, res) => {
 app.get('/api/students/:id_number', async (req, res) => {
   const connection = await pool.getConnection();
   try {
-    const [rows] = await connection.execute(
-      'SELECT id_number, name, status FROM students WHERE id_number = ?',
-      [req.params.id_number]
-    );
+    // Try to get student with image columns
+    let query = `SELECT id_number, name, status`;
+    
+    // Dynamically check if image columns exist
+    try {
+      const [checkResult] = await connection.execute(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+         WHERE TABLE_NAME = 'students' AND COLUMN_NAME IN ('profile_picture', 'wallpaper')`
+      );
+      
+      if (checkResult.length > 0) {
+        query += `, profile_picture, wallpaper`;
+      }
+    } catch (e) {
+      // If we can't check schema, just use basic query
+    }
+    
+    query += ` FROM students WHERE id_number = ?`;
+    
+    const [rows] = await connection.execute(query, [req.params.id_number]);
 
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    res.json(rows[0]);
+    const student = rows[0];
+    
+    // Convert BLOB to base64 if exists
+    if (student.profile_picture) {
+      if (Buffer.isBuffer(student.profile_picture)) {
+        student.profile_picture = student.profile_picture.toString('base64');
+      }
+    } else {
+      student.profile_picture = null;
+    }
+    
+    if (student.wallpaper) {
+      if (Buffer.isBuffer(student.wallpaper)) {
+        student.wallpaper = student.wallpaper.toString('base64');
+      }
+    } else {
+      student.wallpaper = null;
+    }
+
+    console.log(`✓ Student retrieved: ${student.id_number} (${student.name})`);
+
+    res.json(student);
   } catch (error) {
+    console.error('Get student error:', error);
     res.status(500).json({ error: 'Database error' });
   } finally {
     connection.release();
@@ -130,10 +193,10 @@ app.get('/api/students/:id_number', async (req, res) => {
 app.get('/api/settings', async (req, res) => {
   const connection = await pool.getConnection();
   try {
-    const [rows] = await connection.execute('SELECT key, value FROM settings');
+    const [rows] = await connection.execute('SELECT `key`, value FROM settings');
     const settings = {};
     rows.forEach(row => {
-      settings[row.key] = row.value === 'true';
+      settings[row['key']] = row.value === 'true';
     });
     res.json(settings);
   } catch (error) {
@@ -255,7 +318,7 @@ app.post('/api/admin/login', async (req, res) => {
 
 // Admin: Register student
 app.post('/api/students', authenticateToken, async (req, res) => {
-  const { id_number, name } = req.body;
+  const { id_number, name, profile_picture, wallpaper } = req.body;
 
   if (!id_number || !name) {
     return res.status(400).json({ error: 'id_number and name are required' });
@@ -263,16 +326,45 @@ app.post('/api/students', authenticateToken, async (req, res) => {
 
   const connection = await pool.getConnection();
   try {
-    await connection.execute(
-      'INSERT INTO students (id_number, name, status) VALUES (?, ?, ?)',
-      [id_number, name, 'active']
-    );
+    // Convert base64 to buffer if provided
+    let profilePictureBuffer = null;
+    let wallpaperBuffer = null;
+
+    if (profile_picture) {
+      profilePictureBuffer = Buffer.from(profile_picture.split(',')[1] || profile_picture, 'base64');
+    }
+
+    if (wallpaper) {
+      wallpaperBuffer = Buffer.from(wallpaper.split(',')[1] || wallpaper, 'base64');
+    }
+
+    // Try to insert with image columns first
+    try {
+      await connection.execute(
+        'INSERT INTO students (id_number, name, status, profile_picture, wallpaper) VALUES (?, ?, ?, ?, ?)',
+        [id_number, name, 'active', profilePictureBuffer, wallpaperBuffer]
+      );
+      console.log(`✓ Student registered with images: ${id_number}`);
+    } catch (insertError) {
+      // If image columns don't exist, try without them
+      if (insertError.message && insertError.message.includes('Unknown column')) {
+        console.log('Image columns not yet available, registering without images');
+        await connection.execute(
+          'INSERT INTO students (id_number, name, status) VALUES (?, ?, ?)',
+          [id_number, name, 'active']
+        );
+        console.log(`✓ Student registered without images: ${id_number}`);
+      } else {
+        throw insertError;
+      }
+    }
 
     res.status(201).json({ message: 'Student registered successfully' });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
       res.status(400).json({ error: 'Student ID already exists' });
     } else {
+      console.error('Registration error:', error.message);
       res.status(500).json({ error: 'Database error' });
     }
   } finally {
@@ -284,9 +376,51 @@ app.post('/api/students', authenticateToken, async (req, res) => {
 app.get('/api/students', authenticateToken, async (req, res) => {
   const connection = await pool.getConnection();
   try {
-    const [rows] = await connection.execute('SELECT * FROM students ORDER BY created_at DESC');
-    res.json(rows);
+    // Build query dynamically based on available columns
+    let query = `SELECT id_number, name, status, created_at, updated_at`;
+    
+    // Check if image columns exist
+    try {
+      const [checkResult] = await connection.execute(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+         WHERE TABLE_NAME = 'students' AND COLUMN_NAME IN ('profile_picture', 'wallpaper')`
+      );
+      
+      if (checkResult.length > 0) {
+        query += `, profile_picture, wallpaper`;
+      }
+    } catch (e) {
+      // If we can't check schema, just use basic columns
+    }
+    
+    query += ` FROM students ORDER BY created_at DESC`;
+    
+    const [rows] = await connection.execute(query);
+    
+    // Convert BLOB to base64 for each student
+    const students = rows.map(student => {
+      if (student.profile_picture) {
+        if (Buffer.isBuffer(student.profile_picture)) {
+          student.profile_picture = student.profile_picture.toString('base64');
+        }
+      } else {
+        student.profile_picture = null;
+      }
+      
+      if (student.wallpaper) {
+        if (Buffer.isBuffer(student.wallpaper)) {
+          student.wallpaper = student.wallpaper.toString('base64');
+        }
+      } else {
+        student.wallpaper = null;
+      }
+      return student;
+    });
+
+    console.log(`✓ Retrieved ${students.length} students`);
+    res.json(students);
   } catch (error) {
+    console.error('Get all students error:', error);
     res.status(500).json({ error: 'Database error' });
   } finally {
     connection.release();
@@ -295,15 +429,86 @@ app.get('/api/students', authenticateToken, async (req, res) => {
 
 // Admin: Update student
 app.put('/api/students/:id_number', authenticateToken, async (req, res) => {
-  const { name, status } = req.body;
+  const { name, status, profile_picture, wallpaper } = req.body;
   const connection = await pool.getConnection();
   try {
-    await connection.execute(
-      'UPDATE students SET name = ?, status = ? WHERE id_number = ?',
-      [name, status, req.params.id_number]
-    );
+    // Convert base64 to buffer if provided
+    let profilePictureBuffer = null;
+    let wallpaperBuffer = null;
+
+    if (profile_picture && profile_picture !== '') {
+      profilePictureBuffer = Buffer.from(profile_picture.split(',')[1] || profile_picture, 'base64');
+    }
+
+    if (wallpaper && wallpaper !== '') {
+      wallpaperBuffer = Buffer.from(wallpaper.split(',')[1] || wallpaper, 'base64');
+    }
+
+    // Build dynamic update query
+    let updateFields = [];
+    let updateValues = [];
+
+    if (name !== undefined) {
+      updateFields.push('name = ?');
+      updateValues.push(name);
+    }
+    if (status !== undefined) {
+      updateFields.push('status = ?');
+      updateValues.push(status);
+    }
+    
+    // Only add image fields if columns exist
+    const imageFieldsToAdd = [];
+    if (profile_picture !== undefined) {
+      imageFieldsToAdd.push({ field: 'profile_picture', value: profilePictureBuffer });
+    }
+    if (wallpaper !== undefined) {
+      imageFieldsToAdd.push({ field: 'wallpaper', value: wallpaperBuffer });
+    }
+
+    if (updateFields.length === 0 && imageFieldsToAdd.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    updateValues.push(req.params.id_number);
+
+    // Try updating with image fields first
+    try {
+      const fullUpdateFields = [
+        ...updateFields,
+        ...imageFieldsToAdd.map(f => `${f.field} = ?`)
+      ];
+      const fullUpdateValues = [
+        ...updateValues.slice(0, -1),
+        ...imageFieldsToAdd.map(f => f.value),
+        updateValues[updateValues.length - 1]
+      ];
+
+      await connection.execute(
+        `UPDATE students SET ${fullUpdateFields.join(', ')} WHERE id_number = ?`,
+        fullUpdateValues
+      );
+      console.log(`✓ Student updated: ${req.params.id_number}`);
+    } catch (updateError) {
+      // If image columns don't exist, try without them
+      if (updateError.message && updateError.message.includes('Unknown column')) {
+        console.log('Image columns not available, updating without images');
+        if (updateFields.length === 0) {
+          return res.status(400).json({ error: 'No updateable fields available' });
+        }
+        await connection.execute(
+          `UPDATE students SET ${updateFields.join(', ')} WHERE id_number = ?`,
+          updateValues
+        );
+        console.log(`✓ Student updated (basic fields): ${req.params.id_number}`);
+      } else {
+        throw updateError;
+      }
+    }
+
     res.json({ message: 'Student updated successfully' });
   } catch (error) {
+    console.error('Update error:', error.message);
     res.status(500).json({ error: 'Database error' });
   } finally {
     connection.release();
@@ -329,7 +534,7 @@ app.put('/api/settings/:key', authenticateToken, async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.execute(
-      'UPDATE settings SET value = ? WHERE key = ?',
+      'UPDATE settings SET value = ? WHERE `key` = ?',
       [value ? 'true' : 'false', req.params.key]
     );
     res.json({ message: 'Setting updated successfully' });
