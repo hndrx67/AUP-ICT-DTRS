@@ -16,7 +16,7 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 30px 5px;
+  padding: 10px 5px;
   border-bottom: 4px solid #0369a1;
   flex-shrink: 0;
 }
@@ -577,6 +577,31 @@
   letter-spacing: 0.3px;
 }
 
+.id-card-meta-row {
+  display: flex;
+  gap: 15px;
+  align-items: baseline;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(30, 58, 138, 0.08);
+}
+
+.id-card-meta-row .label {
+  font-size: 0.95em;
+  font-weight: 700;
+  color: #0f172a;
+  min-width: 100px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.id-card-meta-row .value {
+  font-size: 1.1em;
+  font-weight: 700;
+  color: #172554;
+  flex: 1;
+  letter-spacing: 0.25px;
+}
+
 /* Responsive Design */
 @media (max-width: 1200px) {
   .id-card-modal {
@@ -661,4 +686,103 @@
   .id-card-info {
     gap: 15px;
   }
+}
+
+/* Fingerprint Modal Styles */
+.fingerprint-modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.5);
+  z-index: 2000;
+  backdrop-filter: blur(2px);
+}
+
+.fingerprint-modal {
+  width: 280px;
+  min-height: 340px;
+  background: #fff;
+  border-radius: 0;
+  box-shadow: 0 12px 40px rgba(18,38,63,0.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  transform: translateY(-6px) scale(0.995);
+  animation: fingerprintPopIn 220ms cubic-bezier(.2,.9,.3,1) forwards;
+  text-align: center;
+  padding: 0;
+  border: 2px solid #0f172a;
+  position: relative;
+  overflow: visible;
+}
+
+/* Corner brackets */
+.fingerprint-modal::before {
+  content: '';
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  top: -4px;
+  left: -4px;
+  border-top: 3px solid #0f172a;
+  border-left: 3px solid #0f172a;
+}
+
+.fingerprint-modal::after {
+  content: '';
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  bottom: -4px;
+  right: -4px;
+  border-bottom: 3px solid #0f172a;
+  border-right: 3px solid #0f172a;
+}
+
+.fingerprint-modal.hide {
+  animation: fingerprintPopOut 180ms ease forwards;
+}
+
+@keyframes fingerprintPopIn {
+  from { opacity: 0; transform: translateY(-10px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes fingerprintPopOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-6px) scale(0.96); }
+}
+
+.fingerprint-icon {
+  width: 80px;
+  height: 80px;
+  color: #0f172a;
+  opacity: 0.9;
+  margin: 40px auto 20px;
+}
+
+.spinner-icon {
+  width: 40px;
+  height: 40px;
+  color: #0369a1;
+  opacity: 0.95;
+  animation: spin 900ms linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.fingerprint-timer {
+  font-weight: 600;
+  color: #0f172a;
+  font-size: 0.95em;
+  letter-spacing: 0.4px;
+  padding: 0 20px 30px 20px;
+  line-height: 1.4;
 }

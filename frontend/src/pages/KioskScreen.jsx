@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import './KioskScreen.css';
+import FingerprintIcon from '../components/FingerprintIcon';
+import Spinner from '../components/Spinner';
 
 // Helper function to detect image format from base64
 function detectImageFormat(base64String) {
@@ -26,11 +28,21 @@ function KioskScreen() {
   const [messageType, setMessageType] = useState('');
   const [settings, setSettings] = useState({ enable_rfid: true, enable_fingerprint: false });
   const [isLoading, setIsLoading] = useState(false);
+  const [fingerprintModalVisible, setFingerprintModalVisible] = useState(false);
+  const [fingerprintStatus, setFingerprintStatus] = useState('waiting'); // 'waiting', 'success', 'failed'
+  const [fingerprintRemaining, setFingerprintRemaining] = useState(0);
   const inputRef = useRef(null);
+  const fingerprintIntervalRef = useRef(null);
+  const fingerprintTimeoutRef = useRef(null);
+  const fingerprintCountdownRef = useRef(null);
 
   // Fetch settings on mount
   useEffect(() => {
+    // initial fetch
     fetchSettings();
+    // poll every second to pick up admin changes immediately
+    const settingsInterval = setInterval(fetchSettings, 1000);
+    return () => clearInterval(settingsInterval);
   }, []);
 
   // Update system time every second
@@ -45,6 +57,15 @@ function KioskScreen() {
     }, 1000);
 
     return () => clearInterval(timer);
+  }, []);
+
+  // cleanup fingerprint polling on unmount
+  useEffect(() => {
+    return () => {
+      if (fingerprintIntervalRef.current) clearInterval(fingerprintIntervalRef.current);
+      if (fingerprintTimeoutRef.current) clearTimeout(fingerprintTimeoutRef.current);
+      if (fingerprintCountdownRef.current) clearInterval(fingerprintCountdownRef.current);
+    };
   }, []);
 
   // Auto-focus input
@@ -109,7 +130,25 @@ function KioskScreen() {
       const serverTime = new Date(timeResponse.data.time);
       setSystemTime(serverTime);
 
-      // Display student info
+      // If fingerprint is enabled globally and required for this student, require fingerprint auth first
+      if (settings.enable_fingerprint && student.fingerprint_enabled) {
+        const authenticated = await waitForFingerprintAuth(studentId, 5000);
+        if (!authenticated) {
+          setMessage('Fingerprint authentication timed out');
+          setMessageType('error');
+          setIsLoading(false);
+          // Reset after showing message briefly
+          setTimeout(() => {
+            setStudentId('');
+            setStudentInfo(null);
+            setMessage('');
+            if (inputRef.current) inputRef.current.focus();
+          }, 2000);
+          return;
+        }
+      }
+
+      // Display student info after fingerprint success (or immediately if fingerprint disabled)
       setStudentInfo({
         ...student,
         timestamp: serverTime
@@ -122,15 +161,15 @@ function KioskScreen() {
         const logResponse = await axios.post('/api/timelogs', {
           student_id: studentId
         });
-        
+
         const logType = logResponse.data.type;
-        
+
         // Update student info with log type
         setStudentInfo(prevState => ({
           ...prevState,
           logType: logType
         }));
-        
+
         // Show the log type message after 1 second
         setTimeout(() => {
           const displayMessage = logType === 'time_in' 
@@ -155,7 +194,7 @@ function KioskScreen() {
         setMessage('Student found but failed to record time log');
         setMessageType('error');
         setIsLoading(false);
-        
+
         // Reset on error
         setTimeout(() => {
           setStudentId('');
@@ -185,6 +224,50 @@ function KioskScreen() {
         }
       }, 2000);
     }
+  };
+
+  // Wait for fingerprint authentication: poll backend for up to timeoutMs
+  const waitForFingerprintAuth = (studentId, timeoutMs = 5000) => {
+    return new Promise((resolve) => {
+      setFingerprintModalVisible(true);
+      setFingerprintStatus('waiting');
+      setFingerprintRemaining(Math.ceil(timeoutMs / 1000));
+
+      // Poll every 500ms
+      const poll = async () => {
+        try {
+          const resp = await axios.get(`/api/fingerprint/verify?student_id=${encodeURIComponent(studentId)}`);
+          if (resp.data && resp.data.authenticated) {
+            clearInterval(fingerprintIntervalRef.current);
+            clearTimeout(fingerprintTimeoutRef.current);
+            if (fingerprintCountdownRef.current) clearInterval(fingerprintCountdownRef.current);
+            setFingerprintStatus('success');
+            setTimeout(() => setFingerprintModalVisible(false), 500);
+            resolve(true);
+          }
+        } catch (err) {
+          // ignore polling errors, continue until timeout
+        }
+      };
+
+      fingerprintIntervalRef.current = setInterval(poll, 500);
+
+      // Countdown timer for UI
+      fingerprintCountdownRef.current = setInterval(() => {
+        setFingerprintRemaining(prev => Math.max(0, prev - 1));
+      }, 1000);
+
+      fingerprintTimeoutRef.current = setTimeout(() => {
+        clearInterval(fingerprintIntervalRef.current);
+        if (fingerprintCountdownRef.current) clearInterval(fingerprintCountdownRef.current);
+        setFingerprintStatus('failed');
+        setTimeout(() => setFingerprintModalVisible(false), 400);
+        resolve(false);
+      }, timeoutMs);
+
+      // Run one immediate poll
+      poll();
+    });
   };
 
   return (
@@ -220,6 +303,21 @@ function KioskScreen() {
         {message && (
           <div className={`message message-${messageType}`}>
             {message}
+          </div>
+        )}
+
+        {/* Fingerprint Prompt Modal */}
+        {fingerprintModalVisible && (
+          <div className="fingerprint-modal-overlay">
+            <div className={`fingerprint-modal ${fingerprintStatus !== 'waiting' ? 'hide' : ''}`}>
+              <FingerprintIcon className="fingerprint-icon" />
+              <Spinner />
+              <div className="fingerprint-timer">
+                {fingerprintStatus === 'waiting' && `Waiting for Biometric Authentication · ${fingerprintRemaining}s`}
+                {fingerprintStatus === 'success' && 'Fingerprint matched'}
+                {fingerprintStatus === 'failed' && 'Timed out'}
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -271,6 +369,18 @@ function KioskScreen() {
                 <div className="id-card-status">
                   <span className="label">Status:</span>
                   <span className="value">{studentInfo.status || 'Active'}</span>
+                </div>
+                <div className="id-card-meta-row">
+                  <span className="label">Assignment:</span>
+                  <span className="value">{studentInfo.work_assignment || 'None'}</span>
+                </div>
+                <div className="id-card-meta-row">
+                  <span className="label">Department:</span>
+                  <span className="value">{studentInfo.department || 'None'}</span>
+                </div>
+                <div className="id-card-meta-row">
+                  <span className="label">Hours/Wk:</span>
+                  <span className="value">{studentInfo.required_hours_per_week || 0}</span>
                 </div>
                 <div className="id-card-time">
                   <span className="label">Time:</span>
